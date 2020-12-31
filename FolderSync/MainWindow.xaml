@@ -1,0 +1,113 @@
+﻿<Window x:Class="FolderSync.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:FolderSync"
+        mc:Ignorable="d"
+        Title="FolderSync" Height="720" Width="1280">
+    <Window.Resources>
+        <local:EntryColorConverter x:Key="entryColorConverter" />
+        <local:SyncVisibilityConverter x:Key="syncVisibilityConverter" />
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="60"/>
+            <RowDefinition/>
+            <RowDefinition Height="100"/>
+        </Grid.RowDefinitions>
+        <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+        
+        <Label Content="FolderSync" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16"/>
+        <Grid HorizontalAlignment="Stretch" Grid.Row="1" VerticalAlignment="Stretch">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="50"/>
+                <RowDefinition/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+
+            <Grid HorizontalAlignment="Stretch" Grid.Row="0" Grid.Column="0" VerticalAlignment="Stretch">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Label Content="Source:" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10" FontSize="14"/>
+                <TextBox x:Name="SourceTextbox" Grid.Column="1" HorizontalAlignment="Stretch" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="14" />
+                <Button x:Name="BrowseSourceButton" Content="Browse..." Grid.Column="2" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10" Click="BrowseSourceButton_Click" Padding="5,2,5,2"/>
+            </Grid>
+
+            <TreeView x:Name="SourceTree" HorizontalAlignment="Stretch" Grid.Row="1" Grid.Column="0" VerticalAlignment="Stretch" Margin="10" ItemsSource="{Binding SourceNodes, UpdateSourceTrigger=PropertyChanged}">
+                <TreeView.ItemContainerStyle>
+                    <Style TargetType="{x:Type TreeViewItem}">
+                        <!-- Items in the ItemsSource need to have these properties for the binding to work -->
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </Style>
+                </TreeView.ItemContainerStyle>
+                
+                <TreeView.ItemTemplate>
+                    <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                        <StackPanel Orientation="Horizontal" Visibility="{Binding SyncState, Converter={StaticResource syncVisibilityConverter}}">
+                            <Image Source="{Binding Icon}" />
+                            <TextBlock Text="{Binding Name}" Foreground="{Binding SyncState, Converter={StaticResource entryColorConverter}}" />
+                        </StackPanel>
+                    </HierarchicalDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+
+            <Grid HorizontalAlignment="Stretch" Grid.Row="0" Grid.Column="1" VerticalAlignment="Stretch">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Label Content="Destination:" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10" FontSize="14"/>
+                <TextBox x:Name="DestTextbox" Grid.Column="1" HorizontalAlignment="Stretch" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="14" />
+                <Button x:Name="BrowseDestButton" Content="Browse..." Grid.Column="2" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10" Click="BrowseDestButton_Click" Padding="5,2,5,2"/>
+            </Grid>
+
+            <TreeView x:Name="DestTree" HorizontalAlignment="Stretch" Grid.Row="1" Grid.Column="1" VerticalAlignment="Stretch" Margin="10" ItemsSource="{Binding DestNodes}">
+                <TreeView.ItemContainerStyle>
+                    <Style TargetType="{x:Type TreeViewItem}">
+                        <!-- Items in the ItemsSource need to have these properties for the binding to work -->
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </Style>
+                </TreeView.ItemContainerStyle>
+
+                <TreeView.ItemTemplate>
+                    <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                        <StackPanel Orientation="Horizontal" Visibility="{Binding SyncState, Converter={StaticResource syncVisibilityConverter}}">
+                            <Image Source="{Binding Icon}" />
+                            <TextBlock Text="{Binding Name}" Foreground="{Binding SyncState, Converter={StaticResource entryColorConverter}}" />
+                        </StackPanel>
+                    </HierarchicalDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+        </Grid>
+
+        <Grid HorizontalAlignment="Stretch" Grid.Row="2" VerticalAlignment="Stretch">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition/>
+                <RowDefinition/>
+                <RowDefinition/>
+            </Grid.RowDefinitions>
+
+            <CheckBox x:Name="UseDateCheckbox" Content="Use Date Modified In Sync" HorizontalAlignment="Center" Margin="0 0 10 0" Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Checked="UseDateCheckbox_Changed" Unchecked="UseDateCheckbox_Changed"/>
+            <CheckBox x:Name="HideSyncedCheckbox" Content="Hide Synced Files" HorizontalAlignment="Center" Margin="0 0 10 0" Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" Checked="HideSyncedCheckbox_Changed" Unchecked="HideSyncedCheckbox_Changed"/>
+            <Button x:Name="analyzeButton" Content="Analyze" HorizontalAlignment="Center" Grid.Row="2" Grid.Column="1" VerticalAlignment="Center" Width="75" Click="analyzeButton_Click" />
+
+            <Button x:Name="syncButton" Content="Sync" IsEnabled="False" HorizontalAlignment="Right" Grid.Row="2" Grid.Column="2" VerticalAlignment="Center" Width="75" Margin="0 0 10 0" Click="syncButton_Click" />
+        </Grid>
+    </Grid>
+</Window>
