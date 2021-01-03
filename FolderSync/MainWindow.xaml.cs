@@ -26,15 +26,58 @@ namespace FolderSync
 
         private string DestDir { get; set; }
 
+        private BackgroundWorker syncWorker { get; set; }
+
+        private static double SyncProgressbarMax;
+
         public MainWindow() {
             InitializeComponent();
             DataContext = this;
+
+            SyncProgressbarMax = SyncProgressbar.Maximum;
 
             HideSyncedFiles = (bool)HideSyncedCheckbox.IsChecked;
             UseDateModified = (bool) UseDateCheckbox.IsChecked;
 
             SourceTextbox.KeyDown += SourceTextbox_KeyDown;
             DestTextbox.KeyDown += DestTextbox_KeyDown;
+
+            syncWorker = new BackgroundWorker();
+            syncWorker.DoWork += SyncWorker_DoWork;
+            syncWorker.ProgressChanged += SyncWorker_ProgressChanged;
+            syncWorker.RunWorkerCompleted += SyncWorker_RunWorkerCompleted;
+
+            syncWorker.WorkerReportsProgress = true;
+        }
+
+
+        private void SyncWorker_DoWork(object sender, DoWorkEventArgs e) {
+            List<SyncOperation> syncOperations = e.Argument as List<SyncOperation>;
+
+            for (int i = 0; i < syncOperations.Count; i++) {
+                SyncOperation syncOperation = syncOperations[i];
+
+                syncWorker.ReportProgress((int)((i / (float)syncOperations.Count) * SyncProgressbarMax), syncOperation);
+
+                // Create the directories needed if they don't exist already
+                Directory.CreateDirectory(Directory.GetParent(syncOperation.DestFilepath).FullName);
+                File.Copy(syncOperation.SourceFilepath, syncOperation.DestFilepath, true);
+            }
+        }
+
+        private void SyncWorker_ProgressChanged(object sender, ProgressChangedEventArgs e) {
+            SyncProgressbar.Value = e.ProgressPercentage;
+
+            SyncOperation currOperation = e.UserState as SyncOperation;
+            SyncStatusLabel.Content = string.Format("Copying {0}...", currOperation.RelativePath);
+        }
+
+        private void SyncWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e) {
+            SyncProgressbar.Value = SyncProgressbar.Maximum;
+
+            SyncStatusLabel.Content = string.Format("Sync Completed.");
+
+            System.Windows.MessageBox.Show("Sync Completed Successfully.", "Sync Completed", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void SourceTextbox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e) {
@@ -54,7 +97,7 @@ namespace FolderSync
             if (e.Key == System.Windows.Input.Key.Enter) {
                 if (DestTextbox.Text.Trim() != "") {
                     if (Directory.Exists(DestTextbox.Text)) {
-                        DestDir = SourceTextbox.Text;
+                        DestDir = DestTextbox.Text;
                         ListDestFiles(DestTextbox.Text);
                     } else {
                         System.Windows.MessageBox.Show(string.Format("The directory {0} could not be found", DestTextbox.Text), "Directory Not Found", MessageBoxButton.OK, MessageBoxImage.Exclamation);
@@ -103,6 +146,119 @@ namespace FolderSync
             while (stack.Count > 0) {
                 var currentNode = stack.Pop();
                 var directoryInfo = (DirectoryInfo)currentNode.DirInfo;
+
+                List<DirectoryInfo> directoriesList = directoryInfo.EnumerateDirectories().OrderBy(d => d.Name).Cast<DirectoryInfo>().ToList();
+
+                List<FileInfo> filesList = directoryInfo.EnumerateFiles().OrderBy(f => f.Name).Cast<FileInfo>().ToList();
+
+                
+
+                int filesIndex = 0;
+                int directoriesIndex = 0;
+
+                /*
+                string lastName;
+
+                if (filesList.Count == 0 && directoriesList.Count == 0) {
+                    continue;
+                }
+                
+                if ((filesList.Count == 0 && directoriesList.Count > 0) || filesList.Count > 0 && directoriesList.Count > 0 && directoriesList[0].Name.CompareTo(filesList[0].Name) < 0) {
+                    lastName = directoriesList[0].Name;
+                    directoriesIndex++;
+                } else if ((directoriesList.Count == 0 && filesList.Count > 0) || filesList.Count > 0 && directoriesList.Count > 0 && directoriesList[0].Name.CompareTo(filesList[0].Name) < 0)  {
+                    lastName = filesList[0].Name;
+                    filesIndex++;
+                }
+                */
+
+                while (filesIndex < filesList.Count && directoriesIndex < directoriesList.Count) {
+                    DirectoryInfo directory = directoriesList[directoriesIndex];
+                    FileInfo file = filesList[filesIndex];
+
+                    if (directory.Name.CompareTo(file.Name) < 0) {
+
+                        var childDirectoryNode = new FileNode {
+                            DirInfo = directory,
+                            Parent = currentNode,
+                            Filepath = directory.FullName,
+                            RelativePath = Path.Combine(currentNode.RelativePath, directory.Name),
+                            Name = directory.Name,
+                            Children = new List<FileNode>(),
+                            SyncState = SyncState.None
+                        };
+                        currentNode.Children.Add(childDirectoryNode);
+                        stack.Push(childDirectoryNode);
+
+                        directoriesIndex++;
+                    } else {
+                        BitmapSource iconSource;
+
+                        if (!iconSources.TryGetValue(file.Extension, out iconSource)) {
+                            iconSource = IconExtensions.GetIconAsBitmapSource(file.Extension, new System.Drawing.Size(16, 16));
+                            iconSources.Add(file.Extension, iconSource);
+                        }
+
+                        var newNode = new FileNode {
+                            FileInfo = file,
+                            Parent = currentNode,
+                            Filepath = file.FullName,
+                            RelativePath = Path.Combine(currentNode.RelativePath, file.Name),
+                            Name = file.Name,
+                            Icon = iconSource,
+                            SyncState = SyncState.None
+                        };
+                        currentNode.Children.Add(newNode);
+
+                        filesIndex++;
+                    }
+                }
+
+                // Only one of these two while loops will ever execute
+                while (filesIndex < filesList.Count) {
+                    FileInfo file = filesList[filesIndex];
+                    BitmapSource iconSource;
+
+                    if (!iconSources.TryGetValue(file.Extension, out iconSource)) {
+                        iconSource = IconExtensions.GetIconAsBitmapSource(file.Extension, new System.Drawing.Size(16, 16));
+                        iconSources.Add(file.Extension, iconSource);
+                    }
+
+                    var newNode = new FileNode {
+                        FileInfo = file,
+                        Parent = currentNode,
+                        Filepath = file.FullName,
+                        RelativePath = Path.Combine(currentNode.RelativePath, file.Name),
+                        Name = file.Name,
+                        Icon = iconSource,
+                        SyncState = SyncState.None
+                    };
+                    currentNode.Children.Add(newNode);
+
+                    filesIndex++;
+                }
+                // Only one of these two while loops will ever execute
+                while (directoriesIndex < directoriesList.Count) {
+                    DirectoryInfo directory = directoriesList[directoriesIndex];
+
+                    var childDirectoryNode = new FileNode {
+                        DirInfo = directory,
+                        Parent = currentNode,
+                        Filepath = directory.FullName,
+                        RelativePath = Path.Combine(currentNode.RelativePath, directory.Name),
+                        Name = directory.Name,
+                        Children = new List<FileNode>(),
+                        SyncState = SyncState.None
+                    };
+                    currentNode.Children.Add(childDirectoryNode);
+                    stack.Push(childDirectoryNode);
+
+                    directoriesIndex++;
+                }
+
+
+
+                /*
                 foreach (var directory in directoryInfo.EnumerateDirectories().OrderBy(d => d.Name)) {
                     var childDirectoryNode = new FileNode {
                         DirInfo = directory,
@@ -134,8 +290,10 @@ namespace FolderSync
                         Icon = iconSource,
                         SyncState = SyncState.None
                     };
+                    Console.WriteLine("Added file with name: {0}", file.Name);
                     currentNode.Children.Add(newNode);
                 }
+                */
 
             }
 
@@ -249,7 +407,11 @@ namespace FolderSync
 
                 while (sourceStack.Count > 0 && destStack.Count > 0) {
                     if (sourceFileNode.RelativePath.CompareTo(destFileNode.RelativePath) < 0) {
+                        //Console.WriteLine("{0} < {1}", sourceFileNode.RelativePath, destFileNode.RelativePath);
                         sourceFileNode.SyncState = SyncState.New;
+                        if (!sourceFileNode.IsExpanded) {
+                            sourceFileNode.Expand();
+                        }
 
                         sourceFileNode = sourceStack.Pop();
 
@@ -261,7 +423,11 @@ namespace FolderSync
 
                         }
                     } else if (sourceFileNode.RelativePath.CompareTo(destFileNode.RelativePath) > 0) {
+                        //Console.WriteLine("{0} > {1}", sourceFileNode.RelativePath, destFileNode.RelativePath);
                         destFileNode.SyncState = SyncState.New;
+                        if (!destFileNode.IsExpanded) {
+                            destFileNode.Expand();
+                        }
 
                         destFileNode = destStack.Pop();
 
@@ -273,9 +439,22 @@ namespace FolderSync
 
                         }
                     } else {
-                        // TODO: Check file size
-                        sourceFileNode.SyncState = SyncState.Synced;
-                        destFileNode.SyncState = SyncState.Synced;
+                        // Console.WriteLine("{0} == {1}", sourceFileNode.RelativePath, destFileNode.RelativePath);
+                        
+                        if (sourceFileNode.Equivalent(destFileNode)) {
+                            sourceFileNode.SyncState = SyncState.Synced;
+                            destFileNode.SyncState = SyncState.Synced;
+                        } else {
+                            sourceFileNode.SyncState = SyncState.Modified;
+                            destFileNode.SyncState = SyncState.Modified;
+                            if (!sourceFileNode.IsExpanded) {
+                                sourceFileNode.Expand();
+                            }
+                            if (!destFileNode.IsExpanded) {
+                                destFileNode.Expand();
+                            }
+                        }
+                        
 
                         sourceFileNode = sourceStack.Pop();
 
@@ -301,10 +480,19 @@ namespace FolderSync
 
                 while (sourceStack.Count > 0) {
                     if (sourceFileNode.RelativePath.CompareTo(destFileNode.RelativePath) == 0) {
-                        // TODO: Check file size
-                        sourceFileNode.SyncState = SyncState.Synced;
-                        destFileNode.SyncState = SyncState.Synced;
-                        Console.WriteLine("Setting to synced");
+                        if (sourceFileNode.Equivalent(destFileNode)) {
+                            sourceFileNode.SyncState = SyncState.Synced;
+                            destFileNode.SyncState = SyncState.Synced;
+                        } else {
+                            sourceFileNode.SyncState = SyncState.Modified;
+                            destFileNode.SyncState = SyncState.Modified;
+                            if (!sourceFileNode.IsExpanded) {
+                                sourceFileNode.Expand();
+                            }
+                            if (!destFileNode.IsExpanded) {
+                                destFileNode.Expand();
+                            }
+                        }
 
                         sourceFileNode = sourceStack.Pop();
 
@@ -317,6 +505,9 @@ namespace FolderSync
                         }
                     } else {
                         sourceFileNode.SyncState = SyncState.New;
+                        if (!sourceFileNode.IsExpanded) {
+                            sourceFileNode.Expand();
+                        }
 
                         sourceFileNode = sourceStack.Pop();
 
@@ -332,10 +523,19 @@ namespace FolderSync
 
                 while (destStack.Count > 0) {
                     if (destFileNode.RelativePath.CompareTo(sourceFileNode.RelativePath) == 0) {
-                        // TODO: Check file size
-                        sourceFileNode.SyncState = SyncState.Synced;
-                        destFileNode.SyncState = SyncState.Synced;
-                        Console.WriteLine("Setting to synced");
+                        if (sourceFileNode.Equivalent(destFileNode)) {
+                            sourceFileNode.SyncState = SyncState.Synced;
+                            destFileNode.SyncState = SyncState.Synced;
+                        } else {
+                            sourceFileNode.SyncState = SyncState.Modified;
+                            destFileNode.SyncState = SyncState.Modified;
+                            if (!sourceFileNode.IsExpanded) {
+                                sourceFileNode.Expand();
+                            }
+                            if (!destFileNode.IsExpanded) {
+                                destFileNode.Expand();
+                            }
+                        }
 
                         destFileNode = destStack.Pop();
 
@@ -348,6 +548,9 @@ namespace FolderSync
                         }
                     } else {
                         destFileNode.SyncState = SyncState.New;
+                        if (!destFileNode.IsExpanded) {
+                            destFileNode.Expand();
+                        }
 
                         destFileNode = destStack.Pop();
 
@@ -362,16 +565,31 @@ namespace FolderSync
                 }
 
                 if (sourceFileNode.RelativePath.CompareTo(destFileNode.RelativePath) == 0) {
-                    // TODO: Check file size
-                    sourceFileNode.SyncState = SyncState.Synced;
-                    destFileNode.SyncState = SyncState.Synced;
-                    Console.WriteLine("Setting to synced");
+                    if (sourceFileNode.Equivalent(destFileNode)) {
+                        sourceFileNode.SyncState = SyncState.Synced;
+                        destFileNode.SyncState = SyncState.Synced;
+                    } else {
+                        sourceFileNode.SyncState = SyncState.Modified;
+                        destFileNode.SyncState = SyncState.Modified;
+                        if (!sourceFileNode.IsExpanded) {
+                            sourceFileNode.Expand();
+                        }
+                        if (!destFileNode.IsExpanded) {
+                            destFileNode.Expand();
+                        }
+                    }
                 } else {
                     if (sourceFileNode.SyncState == SyncState.None) {
                         sourceFileNode.SyncState = SyncState.New;
+                        if (!sourceFileNode.IsExpanded) {
+                            sourceFileNode.Expand();
+                        }
                     }
                     if (destFileNode.SyncState == SyncState.None) {
                         destFileNode.SyncState = SyncState.New;
+                        if (!destFileNode.IsExpanded) {
+                            destFileNode.Expand();
+                        }
                     }
                 }
 
@@ -384,6 +602,7 @@ namespace FolderSync
                 }
 
                 syncButton.IsEnabled = true;
+                previewButton.IsEnabled = true;
             }
         }
 
@@ -402,10 +621,10 @@ namespace FolderSync
             while (sourceStack.Count > 0) {
                 sourceFileNode = sourceStack.Pop();
 
-                if (sourceFileNode.SyncState != SyncState.Synced) {
+                if (sourceFileNode.DirInfo == null && sourceFileNode.SyncState != SyncState.Synced) {
                     Console.WriteLine("{0} --> {1}", sourceFileNode.Filepath, Path.Combine(DestDir, sourceFileNode.RelativePath));
 
-                    syncOperations.Add(new SyncOperation(sourceFileNode.Filepath, Path.Combine(DestDir, sourceFileNode.RelativePath)));
+                    syncOperations.Add(new SyncOperation(sourceFileNode.Filepath, Path.Combine(DestDir, sourceFileNode.RelativePath), sourceFileNode.RelativePath, File.Exists(Path.Combine(DestDir, sourceFileNode.RelativePath))));
                 }
 
                 if (sourceFileNode.DirInfo != null) {
@@ -419,29 +638,39 @@ namespace FolderSync
         }
 
         public void ExecuteSyncOperations(List<SyncOperation> syncOperations) {
-            foreach (SyncOperation syncOperation in syncOperations) {
-                File.Copy(syncOperation.SourceFilepath, syncOperation.DestFilepath, true);
-            }
+            SyncProgressbar.Visibility = Visibility.Visible;
+            SyncStatusLabel.Visibility = Visibility.Visible;
+
+            syncWorker.RunWorkerAsync(argument: syncOperations);
         }
 
         private void syncButton_Click(object sender, RoutedEventArgs e) {
             List<SyncOperation> syncOperations = ComputeSyncOperations();
 
             ExecuteSyncOperations(syncOperations);
+        }
 
-            System.Windows.MessageBox.Show("Sync Completed Successfully.", "Sync Completed", MessageBoxButton.OK, MessageBoxImage.Information);
+        private void previewButton_Click(object sender, RoutedEventArgs e) {
+            SyncPreview syncPreviewWindow = new SyncPreview(ComputeSyncOperations());
+
+            syncPreviewWindow.Show();
         }
     }
 
-    public class SyncOperation
-    {
+    public class SyncOperation {
         public string SourceFilepath { get; set; }
 
         public string DestFilepath { get; set; }
 
-        public SyncOperation(string sourceFilepath, string destFilepath) {
+        public string RelativePath { get; set; }
+
+        public bool IsOverwrite { get; set; }
+
+        public SyncOperation(string sourceFilepath, string destFilepath, string relativePath, bool isOverwrite) {
             SourceFilepath = sourceFilepath;
             DestFilepath = destFilepath;
+            RelativePath = relativePath;
+            IsOverwrite = isOverwrite;
         }
     }
 
@@ -487,6 +716,7 @@ namespace FolderSync
                 if (MainWindow.UseDateModified) {
                     return FileInfo.Length == other.FileInfo.Length && FileInfo.LastWriteTime == other.FileInfo.LastWriteTime;
                 }
+                //Console.WriteLine("Comparing {0} ({1}) to {2} ({3})", Name, FileInfo.Length, other.Name, other.FileInfo.Length);
                 return FileInfo.Length == other.FileInfo.Length;
             } else if (DirInfo != null && other.DirInfo != null) {
                 if (MainWindow.UseDateModified) {
@@ -494,8 +724,24 @@ namespace FolderSync
                 }
                 return true;
             }
+            /*else {
+                if (FileInfo == null)
+                    Console.WriteLine("Null info on {0}", Name);
 
+                if (other.FileInfo == null)
+                    Console.WriteLine("Null info on {0}", other.Name);
+            }*/
             return false;
+        }
+
+        public void Expand() {
+            this.IsExpanded = true;
+            NotifyPropertyChanged("IsExpanded");
+
+            // Assume that if parent is expanded, all ancestors are.
+            if (this.Parent != null && !this.Parent.IsExpanded) {
+                Parent.Expand();
+            }
         }
     }
 }

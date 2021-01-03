@@ -15,10 +15,11 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="60"/>
             <RowDefinition/>
+            <RowDefinition Height="75"/>
             <RowDefinition Height="100"/>
         </Grid.RowDefinitions>
         <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-        
+
         <Label Content="FolderSync" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16"/>
         <Grid HorizontalAlignment="Stretch" Grid.Row="1" VerticalAlignment="Stretch">
             <Grid.RowDefinitions>
@@ -49,7 +50,7 @@
                         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </Style>
                 </TreeView.ItemContainerStyle>
-                
+
                 <TreeView.ItemTemplate>
                     <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                         <StackPanel Orientation="Horizontal" Visibility="{Binding SyncState, Converter={StaticResource syncVisibilityConverter}}">
@@ -92,6 +93,21 @@
         </Grid>
 
         <Grid HorizontalAlignment="Stretch" Grid.Row="2" VerticalAlignment="Stretch">
+            <Grid.RowDefinitions>
+                <RowDefinition/>
+                <RowDefinition/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition Width="3*"/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+
+            <ProgressBar x:Name="SyncProgressbar" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center" Height="20" Margin="5" Visibility="Hidden" Maximum="1000"/>
+            <Label x:Name="SyncStatusLabel" Content="Progress" Grid.Column="1" HorizontalAlignment="Left" Grid.Row="1" VerticalAlignment="Top" Margin="5" Visibility="Hidden"/>
+        </Grid>
+
+        <Grid HorizontalAlignment="Stretch" Grid.Row="3" VerticalAlignment="Stretch">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition/>
                 <ColumnDefinition/>
@@ -105,9 +121,22 @@
 
             <CheckBox x:Name="UseDateCheckbox" Content="Use Date Modified In Sync" HorizontalAlignment="Center" Margin="0 0 10 0" Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Checked="UseDateCheckbox_Changed" Unchecked="UseDateCheckbox_Changed"/>
             <CheckBox x:Name="HideSyncedCheckbox" Content="Hide Synced Files" HorizontalAlignment="Center" Margin="0 0 10 0" Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" Checked="HideSyncedCheckbox_Changed" Unchecked="HideSyncedCheckbox_Changed"/>
+
+
+
             <Button x:Name="analyzeButton" Content="Analyze" HorizontalAlignment="Center" Grid.Row="2" Grid.Column="1" VerticalAlignment="Center" Width="75" Click="analyzeButton_Click" />
 
-            <Button x:Name="syncButton" Content="Sync" IsEnabled="False" HorizontalAlignment="Right" Grid.Row="2" Grid.Column="2" VerticalAlignment="Center" Width="75" Margin="0 0 10 0" Click="syncButton_Click" />
+            <Grid HorizontalAlignment="Stretch" Grid.Row="2" Grid.Column="2" VerticalAlignment="Stretch">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Button x:Name="previewButton" Content="Preview" IsEnabled="False" HorizontalAlignment="Right" Grid.Row="2" Grid.Column="1" VerticalAlignment="Center" Width="75" Margin="10 0 10 0" Click="previewButton_Click" />
+                <Button x:Name="syncButton" Content="Sync" IsEnabled="False" HorizontalAlignment="Right" Grid.Row="2" Grid.Column="2" VerticalAlignment="Center" Width="75" Margin="10 0 10 0" Click="syncButton_Click" />
+
+            </Grid>
         </Grid>
     </Grid>
 </Window>
